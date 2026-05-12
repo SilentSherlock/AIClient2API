@@ -3,6 +3,7 @@ import logger from '../../utils/logger.js';
 import { v4 as uuidv4 } from 'uuid';
 import { getProxyConfigForProvider } from '../../utils/proxy-utils.js';
 import { MODEL_PROVIDER } from '../../utils/common.js';
+import { buildGrokCookieHeader } from './browser-session.js';
 
 /**
  * Grok WebSocket Imagine Service
@@ -31,8 +32,7 @@ export class ImagineWebSocketService {
 
         let ssoToken = token || "";
         if (ssoToken.startsWith("sso=")) ssoToken = ssoToken.substring(4);
-        const cfClearance = this.config.GROK_CF_CLEARANCE;
-        const cookie = ssoToken ? `sso=${ssoToken}; sso-rw=${ssoToken}${cfClearance ? `; cf_clearance=${cfClearance}` : ""}` : "";
+        const cookie = buildGrokCookieHeader(this.config, ssoToken);
 
         const headers = {
             'Cookie': cookie,
@@ -41,8 +41,8 @@ export class ImagineWebSocketService {
             'Connection': 'Upgrade',
             'Pragma': 'no-cache',
             'Cache-Control': 'no-cache',
-            'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8,ja;q=0.7',
-            'User-Agent': this.config.GROK_USER_AGENT || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36',
+            'Accept-Language': this.config.GROK_ACCEPT_LANGUAGE || 'en-US,en;q=0.9',
+            'User-Agent': this.config.GROK_USER_AGENT || 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0',
         };
 
         logger.debug(`[Grok WS] Connecting to ${this.wsUrl} for prompt: ${prompt.substring(0, 50)}...`);

@@ -2,6 +2,7 @@ import axios from 'axios';
 import logger from './logger.js';
 import { configureAxiosProxy } from './proxy-utils.js';
 import { MODEL_PROVIDER } from './common.js';
+import { buildGrokCookieHeader } from '../providers/grok/browser-session.js';
 
 /**
  * 处理 Grok 资源代理请求
@@ -16,6 +17,7 @@ export async function handleGrokAssetsProxy(req, res, config, providerPoolManage
         const targetUrl = requestUrl.searchParams.get('url');
         let ssoToken = requestUrl.searchParams.get('sso');
         const uuid = requestUrl.searchParams.get('uuid');
+        let providerConfig = null;
 
         if (!targetUrl) {
             res.writeHead(400, { 'Content-Type': 'application/json' });
@@ -25,13 +27,15 @@ export async function handleGrokAssetsProxy(req, res, config, providerPoolManage
 
         // 优先尝试从 uuid 换取 token，提高安全性
         if (!ssoToken && uuid && providerPoolManager) {
-            const providerConfig = providerPoolManager.findProviderByUuid(uuid);
+            providerConfig = providerPoolManager.findProviderByUuid(uuid);
             if (providerConfig) {
                 ssoToken = providerConfig.GROK_COOKIE_TOKEN;
                 logger.debug(`[Grok Proxy] Resolved SSO token from uuid: ${uuid}`);
             } else {
                 logger.warn(`[Grok Proxy] Could not find provider configuration for uuid: ${uuid}`);
             }
+        } else if (uuid && providerPoolManager) {
+            providerConfig = providerPoolManager.findProviderByUuid(uuid);
         }
 
         if (!ssoToken) {
@@ -67,8 +71,8 @@ export async function handleGrokAssetsProxy(req, res, config, providerPoolManage
         }
 
         const headers = {
-            'User-Agent': config.GROK_USER_AGENT || 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36',
-            'Cookie': `sso=${ssoToken}; sso-rw=${ssoToken}`,
+            'User-Agent': providerConfig?.GROK_USER_AGENT || config.GROK_USER_AGENT || 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36 Edg/148.0.0.0',
+            'Cookie': buildGrokCookieHeader(providerConfig || config, ssoToken),
             'Referer': 'https://grok.com/',
             'Accept': '*/*'
         };

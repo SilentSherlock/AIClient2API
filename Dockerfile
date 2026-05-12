@@ -1,24 +1,24 @@
 # ── Stage 1: 编译 Go TLS sidecar ──
-FROM golang:1.22-alpine AS sidecar-builder
+FROM docker.m.daocloud.io/library/golang:1.22-alpine AS sidecar-builder
 
 ARG HTTP_PROXY
 ARG HTTPS_PROXY
 ENV HTTP_PROXY=$HTTP_PROXY
 ENV HTTPS_PROXY=$HTTPS_PROXY
 
-RUN apk add --no-cache git
+RUN sed -i 's#https\?://dl-cdn.alpinelinux.org/alpine#https://mirrors.aliyun.com/alpine#g' /etc/apk/repositories && apk add --no-cache git
 
 WORKDIR /build
 COPY tls-sidecar/go.mod tls-sidecar/go.sum* ./
-RUN go mod download || true
+RUN export GOPROXY=https://goproxy.cn,direct && go mod download || true
 
 COPY tls-sidecar/ ./
-RUN go mod tidy && CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o tls-sidecar .
+RUN export GOPROXY=https://goproxy.cn,direct && go mod tidy && CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o tls-sidecar .
 
 # ── Stage 2: Node.js 应用 ──
 # 使用官方Node.js运行时作为基础镜像
 # 选择20-alpine版本以满足undici包的要求（需要Node.js >=20.18.1）
-FROM node:20-alpine
+FROM docker.m.daocloud.io/library/node:20-alpine
 
 # 设置标签
 LABEL maintainer="AIClient2API Team"
@@ -29,7 +29,7 @@ ARG HTTP_PROXY
 ARG HTTPS_PROXY
 
 # 安装必要的系统工具（tar 用于更新功能，git 用于版本检查，procps 用于系统监控）
-RUN apk add --no-cache tar git procps
+RUN sed -i 's#https\?://dl-cdn.alpinelinux.org/alpine#https://mirrors.aliyun.com/alpine#g' /etc/apk/repositories && apk add --no-cache tar git procps
 
 # 设置工作目录
 WORKDIR /app
@@ -38,7 +38,7 @@ WORKDIR /app
 COPY package*.json ./
 
 # 构建时代理（如果提供了的话）
-RUN npm install || npm install --ignore-scripts
+RUN npm config set registry https://registry.npmmirror.com && npm install || npm install --ignore-scripts
 
 # 复制源代码
 COPY . .

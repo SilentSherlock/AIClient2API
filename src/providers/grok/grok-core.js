@@ -11,6 +11,7 @@ import { ConverterFactory } from '../../converters/ConverterFactory.js';
 import * as readline from 'readline';
 import { getProviderPoolManager } from '../../services/service-manager.js';
 import { ImagineWebSocketService } from './ws-imagine.js';
+import { buildGrokCookieHeader, getDefaultGrokBrowserHeaders } from './browser-session.js';
 
 // Chrome 136 TLS cipher suites
 const CHROME_CIPHERS = [
@@ -395,52 +396,37 @@ export class GrokApiService {
     }
 
     buildHeaders() {
-        let ssoToken = this.token || "";
-        if (ssoToken.startsWith("sso=")) ssoToken = ssoToken.substring(4);
-        const cookie = ssoToken ? [`sso=${ssoToken}`, `sso-rw=${ssoToken}`] : [];
-        if (this.cfClearance) cookie.push(`cf_clearance=${this.cfClearance}`);
         return {
-            'accept': '*/*',
-            'accept-language': 'zh-CN,zh;q=0.9,en;q=0.8,ja;q=0.7',
-            'content-type': 'application/json',
-            'cookie': cookie.join('; '),
-            'origin': this.baseUrl,
-            'priority': 'u=1, i',
-            'referer': `${this.baseUrl}/`,
-            'sec-ch-ua': '"Google Chrome";v="143", "Chromium";v="143", "Not A(Brand";v="24"',
-            'sec-ch-ua-arch': '"x86"',
-            'sec-ch-ua-bitness': '"64"',
-            'sec-ch-ua-full-version': '"143.0.7499.110"',
-            'sec-ch-ua-full-version-list': '"Google Chrome";v="143.0.7499.110", "Chromium";v="143.0.7499.110", "Not A(Brand";v="24.0.0.0"',
-            'sec-ch-ua-mobile': '?0',
-            'sec-ch-ua-model': '""',
-            'sec-ch-ua-platform': '"Windows"',
-            'sec-ch-ua-platform-version': '"19.0.0"',
-            'sec-fetch-dest': 'empty',
-            'sec-fetch-mode': 'cors',
-            'sec-fetch-site': 'same-origin',
-            'user-agent': this.userAgent,
+            ...getDefaultGrokBrowserHeaders(this.config, this.baseUrl),
+            'cookie': buildGrokCookieHeader(this.config, this.token),
             'x-statsig-id': this.genStatsigId(),
             'x-xai-request-id': uuidv4()
         };
     }
 
-    /**
-     * 视频生成专属请求头
-     */
-    buildVideoHeaders() {
+    buildChatHeaders({ referer = `${this.baseUrl}/` } = {}) {
         const headers = this.buildHeaders();
         const traceId = uuidv4().replace(/-/g, '');
         const parentId = uuidv4().replace(/-/g, '').substring(0, 16);
+        const sentryRelease = this.config.GROK_SENTRY_RELEASE || 'c97cc8bbc01f1a48b2d8ef6ec081838929a88d20';
+        const sentryPublicKey = this.config.GROK_SENTRY_PUBLIC_KEY || 'b311e0f2690c81f25e2c4cf6d4f7ce1c';
+        const sentryOrgId = this.config.GROK_SENTRY_ORG_ID || '4508179396558848';
 
         Object.assign(headers, {
-            'baggage': `sentry-environment=production,sentry-release=19b21d09e8a9dd440b9caae1bc973b88d50a73a6,sentry-public_key=b311e0f2690c81f25e2c4cf6d4f7ce1c,sentry-trace_id=${traceId},sentry-org_id=4508179396558848,sentry-transaction=%2Fc%2F%3Aslug*%3F,sentry-sampled=false`,
-            'referer': `${this.baseUrl}/imagine`,
+            'baggage': `sentry-environment=production,sentry-release=${sentryRelease},sentry-public_key=${sentryPublicKey},sentry-trace_id=${traceId},sentry-org_id=${sentryOrgId},sentry-sampled=false,sentry-sample_rate=0`,
+            'referer': referer,
             'sentry-trace': `${traceId}-${parentId}-0`,
             'traceparent': `00-${traceId}-${parentId}-00`
         });
 
         return headers;
+    }
+
+    /**
+     * ?????????
+     */
+    buildVideoHeaders() {
+        return this.buildChatHeaders({ referer: `${this.baseUrl}/imagine` });
     }
 
     _extractPostId(text) {
@@ -577,40 +563,41 @@ export class GrokApiService {
         };
 
         const payload = {
-            "temporary": requestBody.temporary !== undefined ? requestBody.temporary : true,
+            "temporary": requestBody.temporary !== undefined ? requestBody.temporary : false,
             "message": message,
             "parentResponseId": requestBody.parentResponseId || undefined,
-            "disableSearch": false,
-            "enableImageGeneration": shouldEnableImage,
-            "imageAttachments": [],
+            "disableSearch": requestBody.disableSearch !== undefined ? requestBody.disableSearch : false,
+            "enableImageGeneration": requestBody.enableImageGeneration !== undefined ? requestBody.enableImageGeneration : true,
+            "imageAttachments": requestBody.imageAttachments || [],
             "returnImageBytes": returnImageBytes,
             "returnRawGrokInXaiRequest": false,
             "fileAttachments": fileAttachments,
-            "enableImageStreaming": shouldEnableImage,
-            "imageGenerationCount": imageGenerationCount,
-            "forceConcise": false,
-            "toolOverrides": finalToolOverrides,
-            "enableSideBySide": true,
+            "enableImageStreaming": requestBody.enableImageStreaming !== undefined ? requestBody.enableImageStreaming : true,
+            "imageGenerationCount": requestBody.imageGenerationCount !== undefined ? requestBody.imageGenerationCount : imageGenerationCount,
+            "forceConcise": requestBody.forceConcise !== undefined ? requestBody.forceConcise : false,
+            "enableSideBySide": requestBody.enableSideBySide !== undefined ? requestBody.enableSideBySide : true,
             "responseMetadata": responseMetadata,
-            "sendFinalMetadata": true,
-            "request_metadata": {},
-            "disableTextFollowUps": false,
-            "disableMemory": false,
-            "forceSideBySide": false,
-            "isAsyncChat": false,
-            "disableSelfHarmShortCircuit": false,
-            "collectionIds": [],
-            "connectors": [],
-            "searchAllConnectors": false,
-            "deviceEnvInfo": { 
+            "sendFinalMetadata": requestBody.sendFinalMetadata !== undefined ? requestBody.sendFinalMetadata : true,
+            "disableTextFollowUps": requestBody.disableTextFollowUps !== undefined ? requestBody.disableTextFollowUps : false,
+            "disableMemory": requestBody.disableMemory !== undefined ? requestBody.disableMemory : false,
+            "forceSideBySide": requestBody.forceSideBySide !== undefined ? requestBody.forceSideBySide : false,
+            "isAsyncChat": requestBody.isAsyncChat !== undefined ? requestBody.isAsyncChat : false,
+            "disableSelfHarmShortCircuit": requestBody.disableSelfHarmShortCircuit !== undefined ? requestBody.disableSelfHarmShortCircuit : false,
+            "collectionIds": requestBody.collectionIds || [],
+            "disabledConnectorIds": requestBody.disabledConnectorIds || [],
+            "deviceEnvInfo": requestBody.deviceEnvInfo || { 
                 "darkModeEnabled": false, 
-                "devicePixelRatio": 1, 
-                "screenWidth": 2560, 
-                "screenHeight": 1440, 
-                "viewportWidth": 1116, 
-                "viewportHeight": 1271 
+                "devicePixelRatio": 2, 
+                "screenWidth": 1440, 
+                "screenHeight": 900, 
+                "viewportWidth": 1029, 
+                "viewportHeight": 708 
             }
         };
+
+        if (Object.keys(finalToolOverrides).length > 0 && requestBody.toolOverrides !== null) {
+            payload.toolOverrides = finalToolOverrides;
+        }
 
         if (mapping.modeId && mapping.name !== 'grok-3') {
             payload.modeId = mapping.modeId;
@@ -1341,7 +1328,7 @@ export class GrokApiService {
         }
 
         const isVideo = modelLower.includes('video');
-        const headers = isVideo ? this.buildVideoHeaders() : this.buildHeaders();
+        const headers = isVideo ? this.buildVideoHeaders() : this.buildChatHeaders();
 
         try {
             const response = await this._request({

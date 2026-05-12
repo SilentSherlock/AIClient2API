@@ -103,7 +103,7 @@ export async function batchImportGrokTokensStream(tokens, onProgress = null, ski
                 credPath: cleanedToken, // 直接存储 Token 字符串
                 defaultCheckModel: 'grok-4.1-mini',
                 needsProjectId: false,
-                urlKeys: ['GROK_BASE_URL', 'GROK_CF_CLEARANCE', 'GROK_USER_AGENT']
+                urlKeys: ['GROK_BASE_URL', 'GROK_CF_CLEARANCE', 'GROK_USER_AGENT', 'GROK_EXTRA_COOKIES', 'GROK_ACCEPT_LANGUAGE', 'GROK_SEC_CH_UA', 'GROK_SEC_CH_UA_ARCH', 'GROK_SEC_CH_UA_BITNESS', 'GROK_SEC_CH_UA_FULL_VERSION', 'GROK_SEC_CH_UA_FULL_VERSION_LIST', 'GROK_SEC_CH_UA_MOBILE', 'GROK_SEC_CH_UA_MODEL', 'GROK_SEC_CH_UA_PLATFORM', 'GROK_SEC_CH_UA_PLATFORM_VERSION', 'GROK_SEC_FETCH_DEST', 'GROK_SEC_FETCH_MODE', 'GROK_SEC_FETCH_SITE', 'GROK_PRIORITY', 'GROK_REFERER']
             });
 
             // 补充 Grok 默认配置
