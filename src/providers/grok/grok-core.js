@@ -395,12 +395,17 @@ export class GrokApiService {
         return Buffer.from(msg).toString('base64');
     }
 
+    getConfiguredHeader(name, fallback = '') {
+        const value = this.config?.[name];
+        return typeof value === 'string' && value.trim() ? value.trim() : fallback;
+    }
+
     buildHeaders() {
         return {
             ...getDefaultGrokBrowserHeaders(this.config, this.baseUrl),
             'cookie': buildGrokCookieHeader(this.config, this.token),
-            'x-statsig-id': this.genStatsigId(),
-            'x-xai-request-id': uuidv4()
+            'x-statsig-id': this.getConfiguredHeader('GROK_X_STATSIG_ID', this.genStatsigId()),
+            'x-xai-request-id': this.getConfiguredHeader('GROK_X_XAI_REQUEST_ID', uuidv4())
         };
     }
 
@@ -413,10 +418,13 @@ export class GrokApiService {
         const sentryOrgId = this.config.GROK_SENTRY_ORG_ID || '4508179396558848';
 
         Object.assign(headers, {
-            'baggage': `sentry-environment=production,sentry-release=${sentryRelease},sentry-public_key=${sentryPublicKey},sentry-trace_id=${traceId},sentry-org_id=${sentryOrgId},sentry-sampled=false,sentry-sample_rate=0`,
+            'baggage': this.getConfiguredHeader(
+                'GROK_BAGGAGE',
+                `sentry-environment=production,sentry-release=${sentryRelease},sentry-public_key=${sentryPublicKey},sentry-trace_id=${traceId},sentry-org_id=${sentryOrgId},sentry-sampled=false,sentry-sample_rate=0`
+            ),
             'referer': referer,
-            'sentry-trace': `${traceId}-${parentId}-0`,
-            'traceparent': `00-${traceId}-${parentId}-00`
+            'sentry-trace': this.getConfiguredHeader('GROK_SENTRY_TRACE', `${traceId}-${parentId}-0`),
+            'traceparent': this.getConfiguredHeader('GROK_TRACEPARENT', `00-${traceId}-${parentId}-00`)
         });
 
         return headers;
